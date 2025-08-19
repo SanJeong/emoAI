@@ -1,0 +1,34 @@
+{
+  "name": "emoai-electron",
+  "version": "0.1.0",
+  "description": "EmoAI - 텍스트 대화형 감정 에이전트",
+  "main": "main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "build": "vite build && tsc",
+    "start": "electron .",
+    "preview": "vite preview"
+  },
+  "keywords": ["electron", "react", "vite", "typescript"],
+  "author": "EmoAI Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.0",
+    "concurrently": "^8.2.2",
+    "electron": "^27.1.3",
+    "typescript": "^5.3.3",
+    "vite": "^4.5.0",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7",
+    "grapheme-splitter": "^1.0.4"
+  }
+}

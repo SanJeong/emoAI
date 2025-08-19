@@ -1,0 +1,28 @@
+backend: faiss                  # qdrant | faiss
+embeddings:
+  provider: openai_compatible   # openai | openai_compatible | local
+  base_url: https://api.openai.com/v1
+  model: text-embedding-3-small # local이면 sentence-transformers 모델명
+  api_key: ${OPENAI_API_KEY}
+  dim: 1536
+
+qdrant:
+  url: http://127.0.0.1:6333
+  api_key: ${QDRANT_API_KEY}
+  collection: memory_v1
+  distance: cosine
+
+faiss:
+  index_path: ./data/faiss.index
+
+ranking:
+  alpha: 1.0     # cosine
+  beta: 0.15     # recency boost
+  gamma: 0.10    # salience
+  delta: 0.50    # boundary penalty
+  halflife_hours: 72
+
+pipeline:
+  preplanner_enabled: true      # Planner 전 하이라이트 보강
+  search_scope_days: 14         # 최근 N일로 필터
+  same_session_only: true

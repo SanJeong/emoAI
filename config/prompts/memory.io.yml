@@ -1,0 +1,33 @@
+id: memory.io.v1
+read: |
+  메모리 읽기 형식:
+  - today_context: 500자 이하 오늘의 대화 요약
+  - highlights: 3~5개 주요 포인트
+  - pinned_facts: 사용자 경계·선호 사항
+  - episodes: 최근 3개 에피소드
+  - schema: 5줄 이내 스키마 요약
+  
+write: |
+  메모리 쓰기 형식 (JSON):
+  {
+    "episode": {
+      "title": "에피소드 제목",
+      "summary": "요약"
+    },
+    "pin": {
+      "key": "fact_key",
+      "value": "고정할 사실"
+    },
+    "schema_delta": {
+      "field": "value"
+    },
+    "influence_ledger": {
+      "operators": ["사용된 오퍼레이터"],
+      "reward": 0.0
+    }
+  }
+  
+  주의사항:
+  - "잊어달라" 요구는 시스템에 위임 (임의 확답 금지)
+  - 민감한 정보는 암호화 고려
+  - 에피소드는 의미 있는 대화 단위로 구분

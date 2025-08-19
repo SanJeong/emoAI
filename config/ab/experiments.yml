@@ -1,0 +1,25 @@
+# A/B 테스트 실험 설정
+experiments:
+  pipeline_mode:
+    enabled: true
+    variants:
+      - name: two_call
+        weight: 70  # 70% 트래픽
+        description: "Planner → Realizer 2단계 파이프라인"
+      - name: one_call
+        weight: 30  # 30% 트래픽
+        description: "단일 LLM 호출로 직접 생성"
+    
+  response_style:
+    enabled: false
+    variants:
+      - name: casual
+        weight: 50
+        params:
+          formality: low
+          emoji_use: moderate
+      - name: balanced
+        weight: 50
+        params:
+          formality: medium
+          emoji_use: minimal
