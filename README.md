@@ -120,10 +120,10 @@ emoai/
 
 ### B/I/T/E 전술 시스템
 
-- **B (Behavior)**: 관계 구축, 공감, 신뢰 형성
-- **I (Information)**: 탐색, 질문, 이해 확장  
-- **T (Thought)**: 전환, 재구성, 관점 변화
-- **E (Emotional)**: 임파워먼트, 자율성, 행동 촉진
+- **B (Behavior)**: 
+- **I (Information)**: 
+- **T (Thought)**: 
+- **E (Emotional)**: 
 
 ### 벡터 검색
 
