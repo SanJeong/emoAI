@@ -16,6 +16,59 @@ class Planner:
         self.config = config_loader.get_model_config()
         self.client = OpenAICompatClient(self.config)
         
+    def _detect_play_intent(self, user_text: str) -> bool:
+        """놀이 인텐트 감지"""
+        play_keywords = ["수수께끼", "퀴즈", "농담", "맞혀봐", "밈", "장난", "놀이", "게임"]
+        return any(keyword in user_text for keyword in play_keywords)
+        
+    def _get_bite_catalog(self):
+        """BITE v2 카탈로그 반환"""
+        return {
+            "B": {
+                "sync_rhythm": "대화 리듬 미세 조절(짧게/한두 문장)",
+                "invite_microaction": "아주 가벼운 선택지 2개",
+                "playful_gap": "짧은 간격 후 한 줄",
+                "shared_ritual_light": "가벼운 반복 장치(의무화 금지)"
+            },
+            "I": {
+                "curiosity_gap": "기만 없이 호기심 여는 반문/단서",
+                "self_reveal_min": "자기 정보 한 스푼",
+                "callback_ref": "이전 요소 콜백",
+                "boundary_hint": "오해 방지 안전레일 한 줄"
+            },
+            "T": {
+                "quick_reframe": "한 줄 재프레이밍(장문/분석 금지)",
+                "yes_and": "받아치며 확장",
+                "alt_choice": "가벼운 대안 2택",
+                "micro_story": "1–2문장 상상 시나리오"
+            },
+            "E": {
+                "affect_match": "톤 맞추기(낮/중/높)",
+                "warm_ping": "짧은 온기/칭찬(과잉 금지)",
+                "tempo_shift": "말속도/길이 전환 1문장"
+            }
+        }
+        
+    def _get_allowed_ops(self, play_intent: bool):
+        """허용된 오퍼레이터 반환"""
+        if play_intent:
+            # 놀이 모드에서 허용된 전술만
+            return [
+                ("T", "yes_and"),
+                ("T", "quick_reframe"),
+                ("I", "curiosity_gap"),
+                ("B", "invite_microaction"),
+                ("E", "affect_match")
+            ]
+        else:
+            # 전체 카탈로그
+            catalog = self._get_bite_catalog()
+            ops = []
+            for channel, tactics in catalog.items():
+                for tactic in tactics.keys():
+                    ops.append((channel, tactic))
+            return ops
+
     async def plan(
         self,
         user_text: str,
@@ -32,7 +85,16 @@ class Planner:
         # 컨텍스트 구성
         context = self._build_context(memory_context)
         
+        # 놀이 인텐트 감지
+        play_intent = self._detect_play_intent(user_text)
+        logger.info(f"놀이 인텐트 감지: {play_intent}")
+        
+        # 허용된 오퍼레이터 조회
+        allowed_ops = self._get_allowed_ops(play_intent)
+        max_ops = 1 if play_intent else 2
+        
         # 메시지 구성
+        intent_info = "놀이/장난 모드" if play_intent else "일반 모드"
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"""
@@ -40,6 +102,10 @@ class Planner:
 {context}
 
 사용자 입력: {user_text}
+
+모드: {intent_info}
+허용된 전술 (최대 {max_ops}개 선택):
+{self._format_allowed_ops(allowed_ops)}
 
 위 정보를 바탕으로 B/I/T/E 전술을 선택하고 JSON 형식으로 응답하세요.
 """}
@@ -67,14 +133,14 @@ class Planner:
                 })
             )
             
-            # 검증 및 정규화
-            output = self._validate_and_normalize(output)
+            # 검증 및 정규화 (놀이 모드 정보 전달)
+            output = self._validate_and_normalize(output, play_intent, max_ops)
             
             logger.info(f"플래너 JSON 응답: {response}")
             logger.info(f"플래너 초안: '{output.draft}'")
             ops_list = [f"{op.get('channel', '')}.{op.get('op', '')}" for op in output.ops]
             logger.info(f"선택된 오퍼레이터: {ops_list}")
-            logger.info(f"플래닝 완료: {len(output.ops)} ops")
+            logger.info(f"플래닝 완료: {len(output.ops)} ops, 놀이모드: {play_intent}")
             return output
             
         except Exception as e:
@@ -102,21 +168,49 @@ class Planner:
             
         return "\n".join(parts) if parts else "컨텍스트 없음"
         
-    def _validate_and_normalize(self, output: PlannerOutput) -> PlannerOutput:
+    def _format_allowed_ops(self, allowed_ops):
+        """허용된 오퍼레이터를 문자열로 포맷팅"""
+        result = []
+        for channel, op in allowed_ops:
+            result.append(f"  {channel}.{op}")
+        return "\n".join(result)
+        
+    def _validate_and_normalize(self, output: PlannerOutput, play_intent: bool = False, max_ops: int = 2) -> PlannerOutput:
         """플랜 검증 및 정규화"""
         
-        # 오퍼레이터 2개 제한
-        if len(output.ops) > 2:
-            logger.warning(f"오퍼레이터 과다: {len(output.ops)} -> 2개로 제한")
-            output.ops = output.ops[:2]
+        # 오퍼레이터 개수 제한
+        if len(output.ops) > max_ops:
+            logger.warning(f"오퍼레이터 과다: {len(output.ops)} -> {max_ops}개로 제한")
+            output.ops = output.ops[:max_ops]
             
-        # 금지 조합 체크 (depth + step_up)
-        ops_types = [op.get("op", "") for op in output.ops]
-        if "depth" in ops_types and "step_up" in ops_types:
-            logger.warning("금지 조합 감지: depth + step_up")
-            # step_up 제거
-            output.ops = [op for op in output.ops if op.get("op") != "step_up"]
-            output.risk_flags["boundary_touch"] = True
+        # 놀이 모드에서 허용되지 않은 전술 체크
+        if play_intent:
+            allowed_ops = self._get_allowed_ops(True)
+            allowed_set = set(allowed_ops)
+            filtered_ops = []
+            
+            for op in output.ops:
+                channel = op.get("channel", "")
+                op_name = op.get("op", "")
+                if (channel, op_name) in allowed_set:
+                    filtered_ops.append(op)
+                else:
+                    logger.warning(f"놀이 모드에서 허용되지 않은 전술 제거: {channel}.{op_name}")
+                    
+            output.ops = filtered_ops
+            
+            # 놀이 모드에서 공감 라벨링 체크
+            for op in output.ops:
+                if "label" in op.get("args", {}) or "empathy" in op.get("op", ""):
+                    logger.warning("놀이 모드에서 공감 라벨링 감지")
+                    output.risk_flags["boundary_touch"] = True
+        else:
+            # 기존 금지 조합 체크 (일반 모드에서만)
+            ops_types = [op.get("op", "") for op in output.ops]
+            if "depth" in ops_types and "step_up" in ops_types:
+                logger.warning("금지 조합 감지: depth + step_up")
+                output.ops = [op for op in output.ops if op.get("op") != "step_up"]
+                output.risk_flags["boundary_touch"] = True
             
         return output
         

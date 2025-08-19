@@ -65,8 +65,17 @@ const ChatPane: React.FC = () => {
   }, [currentSessionId, addMessage]);
 
   useEffect(() => {
-    // 스크롤 최하단으로
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 새 메시지가 추가될 때 자동으로 스크롤을 맨 아래로
+    const messagesContainer = messagesEndRef.current?.parentElement;
+    if (messagesContainer) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      // 사용자가 맨 아래 근처에 있을 때만 자동 스크롤
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   }, [currentSession?.messages]);
 
   const handleSend = () => {

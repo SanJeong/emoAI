@@ -140,6 +140,9 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%; /* flex 부모에 맞춤 */
+  min-height: 0; /* flex에서 축소 허용 */
+  overflow: hidden; /* 자식 요소들이 스크롤하도록 */
 }
 
 .chat-header {
@@ -171,12 +174,16 @@ body {
 
 /* 메시지 영역 */
 .messages {
-  flex: 1;
+  flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
+  padding-right: 8px; /* 스크롤바 공간 확보 */
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0; /* flex 컨테이너에서 스크롤이 작동하도록 */
+  scroll-behavior: smooth; /* 부드러운 스크롤 */
 }
 
 .message-bubble {
@@ -310,19 +317,42 @@ body {
 
 /* 스크롤바 스타일 */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 12px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: #1a1a1a;
+  border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #444;
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 2px solid #1a1a1a;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* 메시지 영역 전용 스크롤바 */
+.messages::-webkit-scrollbar {
+  width: 12px;
+}
+
+.messages::-webkit-scrollbar-track {
+  background: #2a2a2a;
+  border-radius: 6px;
+  margin: 10px 0;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 6px;
+  border: 2px solid #2a2a2a;
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
 }

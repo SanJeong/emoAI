@@ -1,6 +1,7 @@
 """Realizer 모듈 - 최종 텍스트 생성"""
 import re
-from typing import List, Dict, Any, Optional
+import json
+from typing import List, Dict
 from loguru import logger
 
 from ..schemas import PlannerOutput
@@ -43,13 +44,24 @@ class Realizer:
         if conversation_history:
             messages.extend(conversation_history[-6:])  # 최근 6개만
             
+        # 플랜을 assistant 메시지로 추가 (planner 이름으로)
+        plan_json = {
+            "plan_id": planner_output.plan_id,
+            "ops": planner_output.ops,
+            "draft": planner_output.draft,
+            "risk_flags": planner_output.risk_flags
+        }
+        
+        messages.append({
+            "role": "assistant", 
+            "name": "planner", 
+            "content": json.dumps(plan_json, ensure_ascii=False)
+        })
+        
         # 현재 요청 추가
         user_message = f"""사용자: {user_text}
 
-플랜 초안: {planner_output.draft}
-선택된 전술: {[op.get('channel', '') + '.' + op.get('op', '') for op in planner_output.ops]}
-
-위 정보를 참고하여 자연스러운 한국어로 응답하세요. 
+위 플랜을 참고하여 자연스러운 한국어로 응답하세요. 
 - 사람 대 사람 톤
 - 과도한 공감 표현 자제
 - 간결하고 진솔하게
@@ -78,8 +90,17 @@ class Realizer:
                 logger.warning("LLM에서 빈 응답을 받음, 플래너 초안 사용")
                 return self._humanize(planner_output.draft)
             
-            # Humanizer 필터 적용
-            final_text = self._humanize(response)
+            # 플랜에서 놀이 모드 감지
+            play_mode = False
+            if planner_output.ops:
+                for op in planner_output.ops:
+                    if op.get("why", "").find("놀이") != -1 or op.get("why", "").find("장난") != -1:
+                        play_mode = True
+                        break
+            
+            # Humanizer 필터 적용 (모드 전달)
+            humanize_mode = "play" if play_mode else "normal"
+            final_text = self._humanize(response, humanize_mode)
             
             logger.info(f"AI 응답 (Humanizer 후): '{final_text}' (길이: {len(final_text)}자)")
             logger.info(f"텍스트 생성 완료: {len(final_text)}자")
@@ -88,7 +109,7 @@ class Realizer:
         except Exception as e:
             logger.error(f"텍스트 생성 오류: {e}")
             # 플래너 초안 사용
-            return self._humanize(planner_output.draft)
+            return self._humanize(planner_output.draft, "normal")
             
     def _build_system_prompt(self) -> str:
         """시스템 프롬프트 조합"""
@@ -104,22 +125,28 @@ class Realizer:
         if runtime:
             prompts.append(runtime)
             
-        # 환경 제약
-        env = config_loader.get_prompt("env.constraints")
-        if env:
-            prompts.append(env)
-            
+        # env.constraints는 더 이상 주입하지 않음 (서버 내부 설정용만)
         # 기본값
         if not prompts:
             prompts.append(self._get_default_system_prompt())
             
         return "\n\n".join(prompts)
         
-    def _humanize(self, text: str) -> str:
+    def _humanize(self, text: str, mode: str = "normal") -> str:
         """Humanizer 필터 - 금지어 제거 및 톤 조정"""
         
-        logger.debug(f"Humanizer 입력 텍스트: '{text}' (길이: {len(text)}자)")
+        logger.debug(f"Humanizer 입력 텍스트: '{text}' (길이: {len(text)}자) [모드: {mode}]")
         original_text = text
+        
+        # 놀이 모드 치환 룰
+        if mode == "play":
+            text = re.sub(r'무슨 뜻으로.*?(알려줄래|말해줄래)', '일단 내가 한 번 찍어볼게', text)
+            text = text.replace('속상하고 허전한 기분인 것 같네', '좀 아쉬웠지')
+            text = text.replace('속상한 기분인 것 같네', '좀 아쉬웠지')
+            text = text.replace('허전한 기분인 것 같네', '좀 아쉬웠지')
+            # 놀이 모드에서 설명 요구 제거
+            text = re.sub(r'설명해줄래\?', '', text)
+            text = re.sub(r'알려줄래\?', '', text)
         
         # 금지어 제거/치환
         removed_words = []
@@ -146,11 +173,12 @@ class Realizer:
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
         
-        # 문장 길이 체크 (너무 길면 자르기)
+        # 문장 길이 체크 (놀이 모드는 더 짧게)
+        max_sentences = 2 if mode == "play" else 3
         sentences = text.split('.')
-        if len(sentences) > 3:
-            logger.debug(f"문장 길이 제한으로 자르기: {len(sentences)} -> 3문장")
-            text = '.'.join(sentences[:3]) + '.'
+        if len(sentences) > max_sentences:
+            logger.debug(f"문장 길이 제한으로 자르기: {len(sentences)} -> {max_sentences}문장")
+            text = '.'.join(sentences[:max_sentences]) + '.'
             
         logger.debug(f"Humanizer 출력 텍스트: '{text}' (길이: {len(text)}자)")
         

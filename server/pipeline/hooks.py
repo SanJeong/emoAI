@@ -1,8 +1,12 @@
 """파이프라인 훅 - 벡터 검색 통합"""
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 from loguru import logger
 
+
+def _detect_play_intent(user_text: str) -> bool:
+    """놀이 인텐트 감지"""
+    play_keywords = ["수수께끼", "퀴즈", "농담", "맞혀봐", "밈", "장난", "놀이", "게임"]
+    return any(keyword in user_text for keyword in play_keywords)
 
 async def vector_highlights_for_planner(
     user_text: str,
@@ -16,6 +20,11 @@ async def vector_highlights_for_planner(
     사용자 입력과 유사한 과거 컨텍스트를 검색하여
     Planner에게 추가 컨텍스트로 제공
     """
+    
+    # 놀이 인텐트 감지 시 감정 복기 스니펫 주입 금지
+    if _detect_play_intent(user_text):
+        logger.info("놀이 인텐트 감지: 벡터 하이라이트 건너뜀")
+        return []
     
     # 설정 확인
     if not config.get("pipeline", {}).get("preplanner_enabled", False):
