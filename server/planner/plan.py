@@ -49,7 +49,7 @@ class Planner:
             # LLM 호출
             response = await self.client.chat_completion(
                 messages=messages,
-                temperature=0.5,
+                temperature=0.7,
                 response_format={"type": "json_object"}
             )
             

@@ -13,6 +13,8 @@ class ConfigLoader:
     def __init__(self, config_dir: Path = None):
         self.config_dir = config_dir or Path("config")
         self._cache: Dict[str, Any] = {}
+        self._env_vars: Dict[str, str] = {}
+        self._load_env_file()
         self.load_all()
         
     def load_all(self):
@@ -35,6 +37,41 @@ class ConfigLoader:
             
         logger.info(f"설정 로드 완료: {list(self._cache.keys())}")
         
+    def _load_env_file(self):
+        """".env 파일에서 환경변수 로드"""
+        env_path = Path(".env")
+        if not env_path.exists():
+            logger.warning(".env 파일을 찾을 수 없음")
+            return
+            
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    
+                    # 빈 줄이나 주석 건너뛰기
+                    if not line or line.startswith("#"):
+                        continue
+                    
+                    # KEY=VALUE 형식 파싱
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        # 따옴표 제거
+                        if value.startswith('"') and value.endswith('"'):
+                            value = value[1:-1]
+                        elif value.startswith("'") and value.endswith("'"):
+                            value = value[1:-1]
+                            
+                        self._env_vars[key] = value
+                        
+            logger.info(f".env 파일에서 {len(self._env_vars)}개 변수 로드")
+            
+        except Exception as e:
+            logger.error(f".env 파일 로드 오류: {e}")
+        
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         """YAML 파일 로드 및 환경변수 치환"""
         full_path = self.config_dir / path
@@ -48,9 +85,17 @@ class ConfigLoader:
         # 환경변수 치환 ${VAR_NAME}
         def replace_env(match):
             var_name = match.group(1)
+            
+            # .env 파일에서 먼저 찾기
+            if var_name in self._env_vars:
+                value = self._env_vars[var_name]
+                logger.debug(f"환경변수 치환: {var_name} = {value[:10]}..." if len(value) > 10 else f"환경변수 치환: {var_name} = {value}")
+                return value
+            
+            # .env 파일에 없으면 시스템 환경변수에서 찾기
             value = os.getenv(var_name, "")
             if not value:
-                logger.warning(f"환경변수 없음: {var_name}")
+                logger.warning(f"환경변수 없음: {var_name} (.env 파일과 시스템 환경변수에 모두 없음)")
             return value
             
         content = re.sub(r'\$\{([^}]+)\}', replace_env, content)

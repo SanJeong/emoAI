@@ -52,23 +52,36 @@ class Realizer:
 위 정보를 참고하여 자연스러운 한국어로 응답하세요. 
 - 사람 대 사람 톤
 - 과도한 공감 표현 자제
-- 간결하고 진솔하게"""
+- 간결하고 진솔하게
+
+중요: 추론 과정이나 생각 과정을 보이지 말고 바로 최종 응답만 해주세요."""
         
         messages.append({"role": "user", "content": user_message})
         
         try:
+            # 전송할 메시지 로깅 (디버깅용)
+            logger.debug(f"LLM에 전송할 메시지 수: {len(messages)}")
+            for i, msg in enumerate(messages):
+                logger.debug(f"메시지 {i} ({msg['role']}): {msg['content'][:200]}...")
+            
             # LLM 호출
             response = await self.client.chat_completion(
                 messages=messages,
                 temperature=0.7,
-                max_tokens=300
+                max_tokens=1500  # reasoning tokens 문제로 대폭 증가
             )
+            
+            logger.info(f"LLM 원본 응답: '{response}' (길이: {len(response)}자)")
+            
+            # 빈 응답 체크
+            if not response or not response.strip():
+                logger.warning("LLM에서 빈 응답을 받음, 플래너 초안 사용")
+                return self._humanize(planner_output.draft)
             
             # Humanizer 필터 적용
             final_text = self._humanize(response)
             
-            logger.info(f"AI 응답 (생성 전): {response}")
-            logger.info(f"AI 응답 (Humanizer 후): {final_text}")
+            logger.info(f"AI 응답 (Humanizer 후): '{final_text}' (길이: {len(final_text)}자)")
             logger.info(f"텍스트 생성 완료: {len(final_text)}자")
             return final_text
             
@@ -105,9 +118,18 @@ class Realizer:
     def _humanize(self, text: str) -> str:
         """Humanizer 필터 - 금지어 제거 및 톤 조정"""
         
+        logger.debug(f"Humanizer 입력 텍스트: '{text}' (길이: {len(text)}자)")
+        original_text = text
+        
         # 금지어 제거/치환
+        removed_words = []
         for word in self.FORBIDDEN_WORDS:
-            text = text.replace(word, "")
+            if word in text:
+                removed_words.append(word)
+                text = text.replace(word, "")
+        
+        if removed_words:
+            logger.debug(f"제거된 금지어: {removed_words}")
             
         # 과도한 존댓말 축소
         text = re.sub(r'하시겠어요\?', '할래?', text)
@@ -127,7 +149,14 @@ class Realizer:
         # 문장 길이 체크 (너무 길면 자르기)
         sentences = text.split('.')
         if len(sentences) > 3:
+            logger.debug(f"문장 길이 제한으로 자르기: {len(sentences)} -> 3문장")
             text = '.'.join(sentences[:3]) + '.'
+            
+        logger.debug(f"Humanizer 출력 텍스트: '{text}' (길이: {len(text)}자)")
+        
+        if not text.strip() and original_text.strip():
+            logger.warning("Humanizer에서 모든 텍스트가 제거됨, 원본 텍스트 반환")
+            return original_text.strip()
             
         return text
         

@@ -9,7 +9,7 @@ providers:
     model: gpt-5-mini
     api_key: ${OPENAI_API_KEY}
     stream: false
-    temperature: 0.7
+    # temperature: 1  # gpt-5-mini는 기본값(1)만 지원
     
   lmstudio:
     type: openai-compatible

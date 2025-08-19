@@ -1,6 +1,6 @@
 """하이브리드 재랭킹 모듈"""
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 from loguru import logger
 
@@ -32,12 +32,19 @@ def hybrid_score(
                 ts = datetime.fromisoformat(payload["ts"].replace("Z", "+00:00"))
             else:
                 ts = payload["ts"]
+            
+            # timezone 불일치 문제 해결
+            if now.tzinfo is None:
+                now = now.replace(tzinfo=timezone.utc)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
                 
             delta_hours = (now - ts).total_seconds() / 3600
             tau = halflife_hours
             recency = math.exp(-delta_hours / tau)
         except Exception as e:
             logger.debug(f"최신성 계산 실패: {e}")
+            recency = 0.0
             
     # 3. 중요도
     salience = payload.get("salience", 0.5)
@@ -67,7 +74,7 @@ def rerank_hits(
         return []
         
     if now is None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
     # 설정 값
     alpha = config.get("alpha", 1.0)
